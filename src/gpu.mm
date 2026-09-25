@@ -95,6 +95,26 @@ void Device::begin() {
     impl_->encode_failed = false;
 }
 
+static id<MTLComputePipelineState> pipeline(Impl * im, const std::string & kernel) {
+    auto it = im->pipelines.find(kernel);
+    if (it != im->pipelines.end()) return it->second;
+    NSString * name = [NSString stringWithUTF8String:kernel.c_str()];
+    id<MTLFunction> fn = [im->library newFunctionWithName:name];
+    if (!fn) { fprintf(stderr, "gpu: kernel %s not found\n", kernel.c_str()); return nil; }
+    NSError * err = nil;
+    id<MTLComputePipelineState> ps = [im->device newComputePipelineStateWithFunction:fn error:&err];
+    if (!ps) { fprintf(stderr, "gpu: pipeline %s failed: %s\n", kernel.c_str(),
+                       err.localizedDescription.UTF8String); return nil; }
+    im->pipelines[kernel] = ps;
+    return ps;
+}
+
+uint32_t Device::exec_width(const std::string & kernel) {
+    std::lock_guard<std::mutex> lk(impl_->mutex);
+    id<MTLComputePipelineState> ps = pipeline(impl_, kernel);
+    return ps ? (uint32_t) ps.threadExecutionWidth : 0;
+}
+
 void Device::dispatch(const std::string & kernel,
                       uint32_t gx, uint32_t gy, uint32_t gz,
                       uint32_t tx, uint32_t ty, uint32_t tz,
@@ -105,20 +125,8 @@ void Device::dispatch(const std::string & kernel,
         impl_->cmd = [impl_->queue commandBufferWithUnretainedReferences];
         impl_->enc = [impl_->cmd computeCommandEncoder];
     }
-    id<MTLComputePipelineState> ps;
-    auto it = impl_->pipelines.find(kernel);
-    if (it == impl_->pipelines.end()) {
-        NSString * name = [NSString stringWithUTF8String:kernel.c_str()];
-        id<MTLFunction> fn = [impl_->library newFunctionWithName:name];
-        if (!fn) { fprintf(stderr, "gpu: kernel %s not found\n", kernel.c_str()); impl_->encode_failed = true; return; }
-        NSError * err = nil;
-        ps = [impl_->device newComputePipelineStateWithFunction:fn error:&err];
-        if (!ps) { fprintf(stderr, "gpu: pipeline %s failed: %s\n", kernel.c_str(),
-                           err.localizedDescription.UTF8String); impl_->encode_failed = true; return; }
-        impl_->pipelines[kernel] = ps;
-    } else {
-        ps = it->second;
-    }
+    id<MTLComputePipelineState> ps = pipeline(impl_, kernel);
+    if (!ps) { impl_->encode_failed = true; return; }
     [impl_->enc setComputePipelineState:ps];
     for (size_t i = 0; i < buffers.size() && i < 29; ++i) {
         void * bp = const_cast<void *>(buffers[i]);

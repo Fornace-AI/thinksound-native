@@ -1,4 +1,4 @@
-// gemm_attn.metal — simdgroup GEMM (half/f32 weights), batched-head attention.
+// gemm_attn.metal — scalar GEMM/GEMV (half/f32 weights), batched-head attention.
 #include <metal_stdlib>
 using namespace metal;
 
@@ -11,8 +11,8 @@ struct GemmP {
 
 // ---------------------------------------------------------------------------
 // GEMM: Y[M,N] = X[M,K] · W[N,K]^T (+bias), row-major activations.
-// Scalar one-thread-per-output formulation: correct-first baseline.
-// (simdgroup tiling variant to be re-added for perf after parity is green.)
+// Scalar one-thread-per-output formulation. Runtime::gemm dispatches the MPP
+// kernels in gemm_mpp.metal; these stay as the ts-gemm-bench reference.
 // ---------------------------------------------------------------------------
 
 template <typename WT>

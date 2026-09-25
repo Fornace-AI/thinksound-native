@@ -8,7 +8,10 @@ mkdir -p "$BUILD_DIR"
 echo "=== 1. Compiling Metal Shaders ==="
 xcrun -sdk macosx metal -c -O3 "$DIR/shaders/gemm_attn.metal" -o "$BUILD_DIR/gemm_attn.air"
 xcrun -sdk macosx metal -c -O3 "$DIR/shaders/ops_conv.metal" -o "$BUILD_DIR/ops_conv.air"
-xcrun -sdk macosx metallib "$BUILD_DIR/gemm_attn.air" "$BUILD_DIR/ops_conv.air" -o "$BUILD_DIR/thinksound.metallib"
+xcrun -sdk macosx metal -c -O3 "$DIR/shaders/gemm_tiled.metal" -o "$BUILD_DIR/gemm_tiled.air"
+xcrun -sdk macosx metal -c -O3 "$DIR/shaders/gemm_mpp.metal" -o "$BUILD_DIR/gemm_mpp.air"
+xcrun -sdk macosx metallib "$BUILD_DIR/gemm_attn.air" "$BUILD_DIR/ops_conv.air" \
+    "$BUILD_DIR/gemm_tiled.air" "$BUILD_DIR/gemm_mpp.air" -o "$BUILD_DIR/thinksound.metallib"
 
 # Also copy metallib to /tmp/ts-weights for convenient loading
 cp "$BUILD_DIR/thinksound.metallib" /tmp/ts-weights/thinksound.metallib
@@ -59,5 +62,11 @@ clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
     "$DIR/tools/enc_check.cpp" \
     -framework Metal -framework Foundation \
     -o "$BUILD_DIR/ts-enc-check"
+
+clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
+    "$DIR/src/gpu.mm" \
+    "$DIR/tools/gemm_bench.cpp" \
+    -framework Metal -framework Foundation \
+    -o "$BUILD_DIR/ts-gemm-bench"
 
 echo "=== Done: $BUILD_DIR/ts-native built successfully ==="

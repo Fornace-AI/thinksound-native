@@ -8,12 +8,16 @@ static uint32_t grid(size_t n, uint32_t tile) {
     return (uint32_t) ((n + tile - 1) / tile);
 }
 
+// MPP matmul2d kernels (shaders/gemm_mpp.metal): 64(M) x 32(N) output tile per
+// threadgroup of 4 simdgroups; threadgroup width comes from the pipeline.
 void Runtime::gemm(bool wf16, const void * W, const void * X, void * Y, const void * bias,
                    const GemmParams & p) {
     gpu::GemmP cb{p.M, p.N, p.K, p.ldx ? p.ldx : p.K, p.ldw ? p.ldw : p.K,
                   p.ldy ? p.ldy : p.N, bias ? 1u : 0u, 0};
-    dev.dispatch(wf16 ? "gemm_h" : "gemm_f",
-                 grid(p.N, 32), grid(p.M, 8), 1, 256, 1, 1,
+    const char * k = wf16 ? "gemm_mpp_h" : "gemm_mpp_f";
+    uint32_t & sw = wf16 ? simd_w_h : simd_w_f;
+    if (!sw) sw = dev.exec_width(k);
+    dev.dispatch(k, grid(p.N, 32), grid(p.M, 64), 1, 4 * sw, 1, 1,
                  {W, X, Y, bias ? bias : W}, &cb, sizeof(cb));
 }
 

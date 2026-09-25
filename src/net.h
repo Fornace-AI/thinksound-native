@@ -21,11 +21,12 @@ public:
 
     bool init(const std::string & metallib) { return dev.init(metallib); }
 
-    // Y[M,N] = X[M,K] · W[N,K]^T (+bias). wf16 selects gemm_h/gemm_f.
+    // Y[M,N] = X[M,K] · W[N,K]^T (+bias). wf16 selects half/f32 weights.
     void gemm(bool wf16, const void * W, const void * X, void * Y, const void * bias,
               const GemmParams & p);
     void gemv(const void * W, const void * X, void * Y, const void * bias,
               uint32_t N, uint32_t K, uint32_t ldw, bool wf16 = true);
+    uint32_t simd_w_h = 0, simd_w_f = 0;   // cached threadExecutionWidth of the gemm kernels
 
     // one activation row buffer [S,H] (elementwise kernels)
     void silu(void * x, size_t n);

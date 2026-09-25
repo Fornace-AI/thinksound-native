@@ -37,6 +37,7 @@ public:
                   const std::vector<const void *> & buffers,
                   const void * scalars = nullptr, size_t scalar_bytes = 0);
     void commit();   // submit + wait
+    uint32_t exec_width(const std::string & kernel);   // pipeline threadExecutionWidth (0 if missing)
     double last_gpu_ms() const { return last_gpu_ms_; }
 
     Impl * impl() const { return impl_; }
