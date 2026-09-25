@@ -63,6 +63,16 @@ int generate_wav(const GenOpts & o, const std::string & out_path, std::string & 
     gpu::Buf t5_toks = rt.dev.alloc((size_t) T5_TOKEN_CTX * 2048 * 4);
     t5.encode(rt, t5_ids, t5_toks);
     rt.dev.commit();
+    if (getenv("TN_TRACE")) {
+        auto stat = [](const char * n, const gpu::Buf & b, size_t cnt) {
+            double ss = 0; size_t nan = 0; const float * p = (const float *) b.p;
+            for (size_t i = 0; i < cnt; ++i) { if (std::isnan(p[i])) ++nan; else ss += (double) p[i] * p[i]; }
+            fprintf(stderr, "cond %-12s n=%zu nan=%zu |v|=%.3f\n", n, cnt, nan, std::sqrt(ss));
+        };
+        stat("clip_toks", clip_toks, (size_t) CLIP_TOKEN_CTX * 1024);
+        stat("clip_glob", clip_glob, 1024);
+        stat("t5_toks", t5_toks, (size_t) T5_TOKEN_CTX * 2048);
+    }
 
     DitModel dit;
     if (!dit.load(rt, dir + "/dit-bf16.gguf")) { err = "dit load"; return -1; }
@@ -132,6 +142,12 @@ int generate_wav(const GenOpts & o, const std::string & out_path, std::string & 
         dit.forward(rt, x, t_curr, text_pp_cond, gcmlp_cond, fc);
         dit.forward(rt, x, t_curr, text_pp_unc, gcmlp_unc, fu);
         rt.cfg_euler(fc.p, fu.p, x.p, (size_t) T * LATENT_DIM, o.cfg, dt);
+        if (getenv("TN_TRACE")) {
+            rt.dev.commit();
+            double ss = 0, mx = 0; float * xp = (float *) x.p;
+            for (size_t i = 0; i < (size_t) T * LATENT_DIM; ++i) { ss += (double) xp[i] * xp[i]; mx = std::max(mx, (double) std::abs(xp[i])); }
+            fprintf(stderr, "step %2d  t=%.4f  |x|=%.3f  max|x|=%.3f\n", s, t_curr, std::sqrt(ss), mx);
+        }
     }
     rt.dev.commit();
 

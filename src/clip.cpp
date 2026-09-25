@@ -44,7 +44,16 @@ void ClipModel::encode(Runtime & rt, const std::vector<int32_t> & ids,
     uint32_t eos_pos = 0; int32_t mx = ids[0];
     for (uint32_t i = 1; i < n; ++i) if (ids[i] > mx) { mx = ids[i]; eos_pos = i; }
 
+    // TN_DUMP_CLIP=<dir>: layer-0 stage buffers (full rows) for offline parity
+    const char * dump_dir = getenv("TN_DUMP_CLIP");
+    auto dump = [&](uint32_t l, const char * nm, const void * p, size_t cnt) {
+        if (!dump_dir || l != 0) return;
+        rt.dev.commit();
+        FILE * g = fopen((std::string(dump_dir) + "/clipl0_" + nm + ".bin").c_str(), "wb");
+        if (g) { fwrite(p, 4, cnt, g); fclose(g); }
+    };
     for (uint32_t l = 0; l < NL; ++l) {
+        dump(l, "xb", xb.p, (size_t) n * H);
         char b[64];
         snprintf(b, sizeof b, "blk.%u", l);
         rt.ln_wb(xb.p, rb.p, W->need(std::string(b) + ".ln1.w").buf.p,
@@ -59,20 +68,27 @@ void ClipModel::encode(Runtime & rt, const std::vector<int32_t> & ids,
         rt.gemm(false, W->need(std::string(b) + ".v.w").buf.p, rb.p,
                 (char *) qkv.p + (size_t) 2 * H * 4, W->need(std::string(b) + ".v.b").buf.p,
                 {n, H, H, H, H, 3 * H});
+        dump(l, "rb", rb.p, (size_t) n * H);
+        dump(l, "qkv", qkv.p, (size_t) n * 3 * H);
         attn_call(rt, n, 2 /*clip mask*/, eos_pos, nullptr, nullptr);
+        dump(l, "probs", probs.p, (size_t) NH * n * n);
+        dump(l, "att", att.p, (size_t) n * H);
         // out proj + residual
         rt.gemm(false, W->need(std::string(b) + ".out.w").buf.p, att.p, xb2.p,
                 W->need(std::string(b) + ".out.b").buf.p, {n, H, H});
         rt.add_(xb.p, xb2.p, xb.p, (size_t) n * H);
+        dump(l, "xattn", xb.p, (size_t) n * H);
         // mlp
         rt.ln_wb(xb.p, rb.p, W->need(std::string(b) + ".ln2.w").buf.p,
                  W->need(std::string(b) + ".ln2.b").buf.p, n, H, 1e-5f);
         rt.gemm(false, W->need(std::string(b) + ".fc1.w").buf.p, rb.p, xb2.p,
                 W->need(std::string(b) + ".fc1.b").buf.p, {n, 4 * H, H});
         rt.gelu_quick(xb2.p, (size_t) n * 4 * H);
+        dump(l, "act", xb2.p, (size_t) n * 4 * H);
         rt.gemm(false, W->need(std::string(b) + ".fc2.w").buf.p, xb2.p, rb.p,
                 W->need(std::string(b) + ".fc2.b").buf.p, {n, H, 4 * H});
         rt.add_(xb.p, rb.p, xb.p, (size_t) n * H);
+        dump(l, "xout", xb.p, (size_t) n * H);
     }
     rt.ln_wb(xb.p, per_token.p, W->need("out_ln.w").buf.p, W->need("out_ln.b").buf.p, n, H, 1e-5f);
     // pooled: per_token row eos_pos → text_proj gemv
@@ -86,7 +102,8 @@ void ClipModel::attn_call(Runtime & rt, uint32_t n, uint32_t bias_mode, uint32_t
     p.Sq = p.Sk = n;
     p.hd = hd;
     p.nh = NH;
-    p.ld = 3 * H;
+    p.ld = 3 * H;             // q/k/v row stride in qkv
+    p.ldo = H;                // output row stride in att
     p.q_off = 0;
     p.k_off = H;
     p.v_off = 2 * H;
@@ -99,11 +116,8 @@ void ClipModel::attn_call(Runtime & rt, uint32_t n, uint32_t bias_mode, uint32_t
                     {qkv.p, probs.p, bkt ? (const void *) bkt : probs.p,
                      rbias ? (const void *) rbias : probs.p}, &p, sizeof(p));
     rt.dev.dispatch("softmax_rows", n, NH, 1, 1, 1, 1, {probs.p}, &p, sizeof(p));
-    gpu::AttnP p2 = p;
-    p2.ld = H;   // output stride separate: attn_pav reads qkv w/ p.ld, writes O w/ its own
     rt.dev.dispatch("attn_pav", (n + 15) / 16, NH, 1, 256, 1, 1,
                     {probs.p, qkv.p, att.p}, &p, sizeof(p));
-    (void) p2;
 }
 
 } // namespace tn

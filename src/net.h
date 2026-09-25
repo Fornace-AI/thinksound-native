@@ -30,7 +30,7 @@ public:
     // one activation row buffer [S,H] (elementwise kernels)
     void silu(void * x, size_t n);
     void copy(const void * x, void * y, size_t n);
-    void gelu(void * x, size_t n);
+    void geglu(const void * a, const void * b, void * y, size_t n);   // gelu_tanh(a)·b
     void gelu_quick(void * x, size_t n);
     void swiglu(const void * a, const void * b, void * y, size_t n);
     void add_(const void * a, const void * b, void * y, size_t n);
@@ -62,6 +62,9 @@ struct WeightSet {
         return it == w.end() ? nullptr : &it->second;
     }
     const Ent & need(const std::string & name) const;
+    bool is_f16(const std::string & name) const {
+        const Ent * e = find(name); return e && e->f16;
+    }
     // host f32 copy of one tensor (for constants: embeddings, empties)
     std::vector<float> host(const std::string & name) const;
     int64_t ki64(const std::string & key, int64_t def) const { return file.get_i64(key, def); }

@@ -51,12 +51,12 @@ private:
 struct GemmP {
     uint32_t M, N, K;
     uint32_t ldx, ldw, ldy;   // element strides between rows
-    uint32_t x_rows2;         // 1 = single X; 2 = X holds two stacked arms [2M,K]
+    uint32_t bias_mode;       // 0 none, 1 = add f32 bias[n]
     uint32_t pad0;
 };
 static_assert(sizeof(GemmP) <= 64, "constant block budget");
 
-struct AttnP {
+struct AttnP { uint32_t pad_on;
     uint32_t Sq, Sk, hd, nh;
     uint32_t ld;              // row stride of q/k/v buffer
     uint32_t ldo;             // row stride of output buffer

@@ -45,4 +45,19 @@ clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
     -framework Metal -framework Foundation \
     -o "$BUILD_DIR/ts-parity"
 
+clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
+    "$DIR/src/gguf.cpp" \
+    "$DIR/src/tokenizers.cpp" \
+    "$DIR/src/gpu.mm" \
+    "$DIR/src/net.mm" \
+    "$DIR/src/clip.cpp" \
+    "$DIR/src/t5.cpp" \
+    "$DIR/src/dit.cpp" \
+    "$DIR/src/dit_fwd.cpp" \
+    "$DIR/src/vae.cpp" \
+    "$DIR/src/pipeline.cpp" \
+    "$DIR/tools/enc_check.cpp" \
+    -framework Metal -framework Foundation \
+    -o "$BUILD_DIR/ts-enc-check"
+
 echo "=== Done: $BUILD_DIR/ts-native built successfully ==="

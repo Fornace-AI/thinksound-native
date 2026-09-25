@@ -11,7 +11,7 @@ static uint32_t grid(size_t n, uint32_t tile) {
 void Runtime::gemm(bool wf16, const void * W, const void * X, void * Y, const void * bias,
                    const GemmParams & p) {
     gpu::GemmP cb{p.M, p.N, p.K, p.ldx ? p.ldx : p.K, p.ldw ? p.ldw : p.K,
-                  p.ldy ? p.ldy : p.N, 0, 0};
+                  p.ldy ? p.ldy : p.N, bias ? 1u : 0u, 0};
     dev.dispatch(wf16 ? "gemm_h" : "gemm_f",
                  grid(p.N, 32), grid(p.M, 8), 1, 256, 1, 1,
                  {W, X, Y, bias ? bias : W}, &cb, sizeof(cb));
@@ -19,7 +19,7 @@ void Runtime::gemm(bool wf16, const void * W, const void * X, void * Y, const vo
 
 void Runtime::gemv(const void * W, const void * X, void * Y, const void * bias,
                    uint32_t N, uint32_t K, uint32_t ldw, bool wf16) {
-    gpu::GemmP cb{1, N, K, K, ldw ? ldw : K, N, 0, 0};
+    gpu::GemmP cb{1, N, K, K, ldw ? ldw : K, N, bias ? 1u : 0u, 0};
     dev.dispatch(wf16 ? "gemv_h" : "gemv_f",
                  grid(N, 64), 1, 1, 64, 1, 1, {W, X, Y, bias ? bias : W}, &cb, sizeof(cb));
 }
@@ -32,9 +32,9 @@ void Runtime::copy(const void * x, void * y, size_t n) {
     uint32_t cb[1] = {(uint32_t) n};
     dev.dispatch("copy_", grid(n, 256), 1, 1, 256, 1, 1, {x, y}, cb, 4);
 }
-void Runtime::gelu(void * x, size_t n) {
+void Runtime::geglu(const void * a, const void * b, void * y, size_t n) {
     uint32_t cb[1] = {(uint32_t) n};
-    dev.dispatch("gelu_", grid(n, 256), 1, 1, 256, 1, 1, {x}, cb, 4);
+    dev.dispatch("geglu_", grid(n, 256), 1, 1, 256, 1, 1, {a, b, y}, cb, 4);
 }
 void Runtime::gelu_quick(void * x, size_t n) {
     uint32_t cb[1] = {(uint32_t) n};

@@ -11,11 +11,16 @@ kernel void silu_(device float * x [[buffer(0)]], constant N1 & p [[buffer(1)]],
     float v = x[gid];
     x[gid] = v / (1.0f + exp(-v));
 }
-kernel void gelu_(device float * x [[buffer(0)]], constant N1 & p [[buffer(1)]], uint gid [[thread_position_in_grid]]) {
+// gated GELU (T5 v1.1 FFN): y = gelu_tanh(a) * b
+kernel void geglu_(device const float * a [[buffer(0)]], device const float * b [[buffer(1)]],
+                   device float * y [[buffer(2)]], constant N1 & p [[buffer(3)]],
+                   uint gid [[thread_position_in_grid]]) {
     if (gid >= p.n) return;
-    float v = x[gid];
-    // standard tanh approximation of GELU
-    x[gid] = 0.5f * v * (1.0f + tanh(0.7978845608f * (v + 0.044715f * v * v * v)));
+    float v = a[gid];
+    // standard tanh approximation of GELU; clamp arg at +-10 where tanh saturates
+    // (0.0447*v^3 overflows f32 exp inside fast-math tanh for |v| > ~90)
+    float arg = 0.7978845608f * (v + 0.044715f * v * v * v);
+    y[gid] = 0.5f * v * (1.0f + tanh(clamp(arg, -10.0f, 10.0f))) * b[gid];
 }
 kernel void gelu_quick_(device float * x [[buffer(0)]], constant N1 & p [[buffer(1)]], uint gid [[thread_position_in_grid]]) {
     if (gid >= p.n) return;

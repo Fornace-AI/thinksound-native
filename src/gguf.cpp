@@ -43,7 +43,7 @@ uint64_t GgufTensor::type_size(uint32_t t) {
         case ML_F32: return 4;
         case ML_F16: return 2;
         case ML_BF16: return 2;
-        case ML_Q8_0: return 2 + 16;   // f16 scale + 16 * i8
+        case ML_Q8_0: return 2 + 32;   // f16 scale + 32 * i8
         case ML_Q4_0: return 2 + 8;
         case ML_Q4_1: return 2 + 2 + 8;
         default: return 0;
@@ -52,7 +52,7 @@ uint64_t GgufTensor::type_size(uint32_t t) {
 
 uint64_t GgufTensor::block_elems(uint32_t t) {
     switch (t) {
-        case ML_Q8_0: return 16;
+        case ML_Q8_0: return 32;
         case ML_Q4_0:
         case ML_Q4_1: return 16;
         default: return 1;
@@ -214,9 +214,9 @@ std::vector<float> to_f32(const GgufTensor & t) {
             }
         }
     } else if (t.type == ML_Q8_0) {
-        size_t blocks = out.size() / 16;
+        size_t blocks = out.size() / 32;
         for (size_t b = 0; b < blocks; ++b) {
-            const uint8_t * blk = d + b * 18;
+            const uint8_t * blk = d + b * 34;
             uint16_t su; memcpy(&su, blk, 2);
             // f16 scale
             uint32_t exp = (su >> 10) & 0x1F, man = su & 0x3FF, sign = (su >> 15) & 1, sf;
@@ -224,7 +224,7 @@ std::vector<float> to_f32(const GgufTensor & t) {
             else sf = (sign << 31) | ((exp + 112) << 23) | (man << 13);
             float s; memcpy(&s, &sf, 4);
             const int8_t * q = (const int8_t *) (blk + 2);
-            for (int k = 0; k < 16; ++k) out[b * 16 + k] = s * (float) q[k];
+            for (int k = 0; k < 32; ++k) out[b * 32 + k] = s * (float) q[k];
         }
     } else {
         fprintf(stderr, "to_f32: unsupported type %u for %s\n", t.type, t.name.c_str());

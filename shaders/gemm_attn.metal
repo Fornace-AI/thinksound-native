@@ -5,6 +5,7 @@ using namespace metal;
 struct GemmP {
     uint M, N, K;
     uint ldx, ldw, ldy;
+    uint bias_mode;   // 0 none, 1 = add f32 bias[n]
     uint pad0;
 };
 
@@ -25,7 +26,7 @@ static inline void gemm_body(
     if (m >= p.M || n >= p.N) return;
     const device WT * w = W + (size_t) n * p.ldw;
     const device float * x = X + (size_t) m * p.ldx;
-    float acc = bias ? bias[n] : 0.0f;
+    float acc = p.bias_mode ? bias[n] : 0.0f;
     for (uint k = 0; k < p.K; ++k) acc += (float) w[k] * x[k];
     Y[(size_t) m * p.ldy + n] = acc;
 }
@@ -46,10 +47,10 @@ kernel void gemm_f(const device float * W [[buffer(0)]], const device float * X 
 // gemv: y[n] = bias[n] + Σ_k W[n,k]·x[k]   (M = 1)
 template <typename WT>
 static inline float gemv_body(const device WT * W, const device float * X,
-                              const device float * bias, uint n, uint K, uint ldw) {
+                              const device float * bias, uint n, uint K, uint ldw, uint bias_mode) {
     // weights stored numpy row-major [N,K]: element (n,k) at n·K + k
     const device WT * w = W + (size_t) n * ldw;
-    float acc = bias ? bias[n] : 0.0f;
+    float acc = bias_mode ? bias[n] : 0.0f;
     for (uint k = 0; k < K; ++k) acc += (float) w[k] * X[k];
     return acc;
 }
@@ -60,7 +61,7 @@ kernel void gemv_h(const device half * W [[buffer(0)]], const device float * X [
                    uint3 tid [[thread_position_in_threadgroup]]) {
     uint n = tgid.x * 64 + tid.x;
     if (n >= p.N) return;
-    Y[n] = gemv_body<half>(W, X, bias, n, p.K, p.ldw);
+    Y[n] = gemv_body<half>(W, X, bias, n, p.K, p.ldw, p.bias_mode);
 }
 kernel void gemv_f(const device float * W [[buffer(0)]], const device float * X [[buffer(1)]],
                    device float * Y [[buffer(2)]], const device float * bias [[buffer(3)]],
@@ -69,7 +70,7 @@ kernel void gemv_f(const device float * W [[buffer(0)]], const device float * X 
                    uint3 tid [[thread_position_in_threadgroup]]) {
     uint n = tgid.x * 64 + tid.x;
     if (n >= p.N) return;
-    Y[n] = gemv_body<float>(W, X, bias, n, p.K, p.ldw);
+    Y[n] = gemv_body<float>(W, X, bias, n, p.K, p.ldw, p.bias_mode);
 }
 
 // ---------------------------------------------------------------------------
@@ -81,6 +82,7 @@ kernel void gemv_f(const device float * W [[buffer(0)]], const device float * X 
 // ---------------------------------------------------------------------------
 
 struct AttnP {
+    uint pad_on;      // 1: mask keys where pad flag == 0 (t5)
     uint Sq, Sk, hd, nh;
     uint ld;
     uint ldo;
@@ -129,7 +131,9 @@ kernel void attn_qk(const device float * QKV [[buffer(0)]],
             for (uint d = 0; d < hd; ++d) s += Qs[ql][d] * Ks[kl][d];
             s *= p.scale;
             if (p.bias_mode == 1) {
-                s += rb[(size_t) bkt[q * p.Sk + k] * p.nh + h];
+                const device int * pad = bkt + (size_t) p.Sq * p.Sk;   // pad flags packed after buckets
+                if (p.pad_on && pad[k] == 0) s = -INFINITY;
+                else s += rb[(size_t) bkt[q * p.Sk + k] * p.nh + h];
             } else if (p.bias_mode == 2) {
                 if (!(k <= q && k <= p.eot)) s = -INFINITY;
             }
