@@ -123,13 +123,17 @@ int generate_wav(const GenOpts & o, const std::string & out_path, std::string & 
     dit.prep_text_arm(rt, text_cat_cond, clip_glob, text_pp_cond, gcmlp_cond);
     dit.prep_text_arm(rt, text_cat_unc, gtext_unc, text_pp_unc, gcmlp_unc);
 
-    // initial noise: mt19937 seeded randn
+    // initial noise: mt19937 seeded randn, drawn linearly in the reference's
+    // channel-major order (draw i -> c = i / T, t = i % T), stored time-major [T,64]
     std::mt19937 rng(o.seed);
     std::normal_distribution<float> nd(0, 1);
-    std::vector<float> x_host((size_t) T * LATENT_DIM);
-    for (auto & v : x_host) v = nd(rng);
-    gpu::Buf x = rt.dev.alloc(x_host.size() * 4);
-    memcpy(x.p, x_host.data(), x_host.size() * 4);
+    gpu::Buf x = rt.dev.alloc((size_t) T * LATENT_DIM * 4);
+    for (uint32_t c = 0; c < LATENT_DIM; ++c)
+        for (uint32_t t = 0; t < T; ++t) ((float *) x.p)[(size_t) t * LATENT_DIM + c] = nd(rng);
+    if (const char * p0 = getenv("TN_DUMP_X0")) {
+        FILE * g = fopen(p0, "wb");
+        if (g) { fwrite(x.p, 4, (size_t) T * LATENT_DIM, g); fclose(g); }
+    }
 
     gpu::Buf fc = rt.dev.alloc((size_t) T * LATENT_DIM * 4);
     gpu::Buf fu = rt.dev.alloc((size_t) T * LATENT_DIM * 4);
