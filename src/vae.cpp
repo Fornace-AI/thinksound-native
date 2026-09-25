@@ -1,4 +1,4 @@
-// vae.cpp — Vocos conv-decoder on Metal (f32 weights via conv1d_fwd_f).
+// vae.cpp — Vocos conv-decoder on Metal (f32 weights, conv as im2col + GEMM).
 // Activations are time-major [T, C] (channel fastest). Every kernel reads one
 // buffer and writes a different one: x (stream), h/g (scratch).
 #include "models.h"
@@ -37,10 +37,8 @@ std::vector<float> VaeModel::decode(Runtime & rt, const float * latent, uint32_t
                     uint32_t Tin, uint32_t OL, uint32_t stride, uint32_t pad, uint32_t dil, bool convt) {
         const GgufTensor * t = tens(wn + ".weight");
         const uint32_t K = (uint32_t) t->ne[0], IC = (uint32_t) t->ne[1], OC = (uint32_t) t->ne[2];
-        const void * b = bias ? need(wn + ".bias") : nullptr;
-        gpu::ConvP p{Tin, OL, IC, OC, K, stride, pad, dil, IC, OC, convt ? 1u : 0u, b ? 1u : 0u};
-        rt.dev.dispatch("conv1d_fwd_f", (OL + 31) / 32, (OC + 7) / 8, 1, 256, 1, 1,
-                        {src, need(wn + ".weight"), b ? b : src, dst}, &p, sizeof(p));
+        rt.conv(false, need(wn + ".weight"), bias ? need(wn + ".bias") : nullptr, src, dst,
+                Tin, OL, IC, OC, K, stride, pad, dil, convt);
         return OC;
     };
     std::vector<gpu::Buf> abs;   // alpha|beta tables, alive until commit

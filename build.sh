@@ -69,4 +69,12 @@ clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
     -framework Metal -framework Foundation \
     -o "$BUILD_DIR/ts-gemm-bench"
 
+clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
+    "$DIR/src/gguf.cpp" \
+    "$DIR/src/gpu.mm" \
+    "$DIR/src/net.mm" \
+    "$DIR/tools/conv_bench.cpp" \
+    -framework Metal -framework Foundation \
+    -o "$BUILD_DIR/ts-conv-bench"
+
 echo "=== Done: $BUILD_DIR/ts-native built successfully ==="

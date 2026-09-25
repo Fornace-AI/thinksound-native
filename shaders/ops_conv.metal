@@ -258,3 +258,26 @@ kernel void conv1d_fwd_f(device const float * x [[buffer(0)]], device const floa
                          uint3 tid [[thread_position_in_threadgroup]]) {
     conv_body<float>(x, w, bias, y, p, tgid, tid.x);
 }
+
+// im2col for conv-as-GEMM: col[r, ic*K + k] = x[ti(t0 + r, k), ic], zero outside [0,T).
+// ti follows conv_body: strided/dilated conv, or convt (zero-stuffed input, stride-1 conv).
+// col rows are the GEMM X operand; the gguf weight [OC][IC][K] is the matching W[OC, IC*K].
+struct IcP { uint T, rows, IC, K, stride, pad, dil, ldx, convt, t0; };
+kernel void im2col(device const float * x [[buffer(0)]], device float * col [[buffer(1)]],
+                   constant IcP & p [[buffer(2)]], uint gid [[thread_position_in_grid]]) {
+    const uint KC = p.IC * p.K;
+    if (gid >= p.rows * KC) return;
+    const uint t = p.t0 + gid / KC, r = gid % KC, ic = r / p.K, k = r % p.K;
+    int ti;
+    bool ok;
+    if (p.convt) {
+        const int ui = (int) t - (int) p.pad + (int) k;
+        ok = ui >= 0 && ui % (int) p.stride == 0;
+        ti = ui / (int) p.stride;
+    } else {
+        ti = (int) (t * p.stride) - (int) p.pad + (int) (k * p.dil);
+        ok = true;
+    }
+    ok = ok && ti >= 0 && ti < (int) p.T;
+    col[gid] = ok ? x[(size_t) ti * p.ldx + ic] : 0.0f;
+}

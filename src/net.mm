@@ -1,5 +1,6 @@
 // net.mm — runtime + weight store implementation.
 #include "net.h"
+#include <algorithm>
 #include <cstring>
 
 namespace tn {
@@ -19,6 +20,32 @@ void Runtime::gemm(bool wf16, const void * W, const void * X, void * Y, const vo
     if (!sw) sw = dev.exec_width(k);
     dev.dispatch(k, grid(p.N, 32), grid(p.M, 64), 1, 4 * sw, 1, 1,
                  {W, X, Y, bias ? bias : W}, &cb, sizeof(cb));
+}
+
+void Runtime::conv(bool wf16, const void * W, const void * bias, const void * x, void * y,
+                   uint32_t T, uint32_t OL, uint32_t IC, uint32_t OC, uint32_t K,
+                   uint32_t stride, uint32_t pad, uint32_t dil, bool convt) {
+    if (K == 1 && stride == 1 && pad == 0 && !convt && OL == T) {   // pointwise: plain GEMM
+        gemm(wf16, W, x, y, bias, {OL, OC, IC});
+        return;
+    }
+    if (OC < 32) {   // too narrow for a 32-wide GEMM tile (VAE -> 2ch): direct scalar conv
+        gpu::ConvP p{T, OL, IC, OC, K, stride, pad, dil, IC, OC, convt ? 1u : 0u, bias ? 1u : 0u};
+        dev.dispatch(wf16 ? "conv1d_fwd" : "conv1d_fwd_f", grid(OL, 32), grid(OC, 8), 1, 256, 1, 1,
+                     {x, W, bias ? bias : x, y}, &p, sizeof(p));
+        return;
+    }
+    // output rows per chunk: keep the col scratch <= 64 MB (VAE stages reach 352k rows)
+    const size_t KC = (size_t) IC * K, max_elems = (size_t) 16 << 20;
+    const uint32_t rows = (uint32_t) std::max<size_t>(1, std::min<size_t>(OL, max_elems / KC));
+    if (col.bytes < (size_t) rows * KC * 4) col = dev.alloc((size_t) rows * KC * 4);
+    for (uint32_t t0 = 0; t0 < OL; t0 += rows) {
+        const uint32_t n = std::min(rows, OL - t0);
+        struct { uint32_t T, rows, IC, K, stride, pad, dil, ldx, convt, t0; } cb{
+            T, n, IC, K, stride, pad, dil, IC, convt ? 1u : 0u, t0};
+        dev.dispatch("im2col", grid((size_t) n * KC, 256), 1, 1, 256, 1, 1, {x, col.p}, &cb, sizeof(cb));
+        gemm(wf16, W, col.p, (char *) y + (size_t) t0 * OC * 4, bias, {n, OC, (uint32_t) KC});
+    }
 }
 
 void Runtime::gemv(const void * W, const void * X, void * Y, const void * bias,

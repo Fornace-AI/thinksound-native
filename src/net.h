@@ -26,6 +26,12 @@ public:
               const GemmParams & p);
     void gemv(const void * W, const void * X, void * Y, const void * bias,
               uint32_t N, uint32_t K, uint32_t ldw, bool wf16 = true);
+    // conv1d as GEMM: im2col(x [T,IC]) -> [OL, IC*K], times W [OC, IC*K] (gguf [K,IC,OC]).
+    // y [OL,OC] (+bias). convt: zero-stuffed input, stride-1 conv with the converted kernel.
+    void conv(bool wf16, const void * W, const void * bias, const void * x, void * y,
+              uint32_t T, uint32_t OL, uint32_t IC, uint32_t OC, uint32_t K,
+              uint32_t stride, uint32_t pad, uint32_t dil, bool convt = false);
+    gpu::Buf col;                          // im2col scratch (grown on demand, reused)
     uint32_t simd_w_h = 0, simd_w_f = 0;   // cached threadExecutionWidth of the gemm kernels
 
     // one activation row buffer [S,H] (elementwise kernels)

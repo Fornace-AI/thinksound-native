@@ -11,9 +11,7 @@ namespace tn {
 namespace {
 inline void conv(Runtime & rt, const void * w, const void * b, const void * x, void * y,
                  uint32_t T, uint32_t IC, uint32_t OC, uint32_t K, uint32_t pad, uint32_t dil) {
-    gpu::ConvP p{T, T, IC, OC, K, 1, pad, dil, IC, OC, 0, b ? 1u : 0u};
-    rt.dev.dispatch("conv1d_fwd", (T + 31) / 32, (OC + 7) / 8, 1, 256, 1, 1,
-                    {x, w, b ? b : x, y}, &p, sizeof(p));
+    rt.conv(true, w, b, x, y, T, T, IC, OC, K, 1, pad, dil);
 }
 struct AD { uint32_t H, per_row, chunks, base; float eps; };
 struct GA { uint32_t H, per_row, chunks, gate_idx; };
