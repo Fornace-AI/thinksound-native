@@ -1,0 +1,4 @@
+build/
+_tmp/
+*.wav
+out.wav
