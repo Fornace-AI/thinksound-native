@@ -164,6 +164,9 @@ void DitModel::forward(Runtime & rt, gpu::Buf & x, float t,
     }
 
     // ---- joint blocks ----
+    // clip/text streams evolve per forward; start each forward from the prep outputs
+    rt.copy(clip_pp.p, clip_s.p, (size_t) C * H_);
+    rt.copy(text_pp.p, text_s.p, (size_t) TS * H_);
     void * lat = x_in.p;
     const uint32_t S = T_ + C + TS;
     const float clip_fscale = (float) T_ / (float) C;
@@ -192,19 +195,19 @@ void DitModel::forward(Runtime & rt, gpu::Buf & x, float t,
         // Clip modulation: 2*H in block 6, 6*H in blocks 0..5
         uint32_t ct_chunks = pre_only ? 2u : 6u;
         rt.gemv(W->need(std::string(jb) + ".clip_block.adaLN_modulation.1.weight").buf.p,
-                global_c.p, mod_ct.p,
+                global_c.p, mod_clip.p,
                 W->need(std::string(jb) + ".clip_block.adaLN_modulation.1.bias").buf.p,
                 ct_chunks * H_, H_, H_);
-        pre_attn(rt, *this, std::string(jb) + ".clip_block", clip_pp.p, mod_ct.p, false, C, T_,
+        pre_attn(rt, *this, std::string(jb) + ".clip_block", clip_s.p, mod_clip.p, false, C, T_,
                  (char *) jointq.p + (size_t) T_ * 3 * H_ * 4, (const int *) pos_clip.p,
                  clip_fscale, false, ct_chunks);
 
         // Text modulation: 2*H in block 6, 6*H in blocks 0..5
         rt.gemv(W->need(std::string(jb) + ".text_block.adaLN_modulation.1.weight").buf.p,
-                global_c.p, mod_ct.p,
+                global_c.p, mod_text.p,
                 W->need(std::string(jb) + ".text_block.adaLN_modulation.1.bias").buf.p,
                 ct_chunks * H_, H_, H_);
-        pre_attn(rt, *this, std::string(jb) + ".text_block", text_pp.p, mod_ct.p, false, TS, T_ + C,
+        pre_attn(rt, *this, std::string(jb) + ".text_block", text_s.p, mod_text.p, false, TS, T_ + C,
                  (char *) jointq.p + (size_t)(T_ + C) * 3 * H_ * 4, nullptr, 1.0f, true, ct_chunks);
 
         if (i == 0 && getenv("TN_DUMP_EARLY")) {
@@ -236,10 +239,10 @@ void DitModel::forward(Runtime & rt, gpu::Buf & x, float t,
         post_attn(rt, *this, std::string(jb) + ".latent_block", lat, joint_att.p, mod_lat.p,
                   true, T_, false);
         if (!pre_only) {
-            post_attn(rt, *this, std::string(jb) + ".clip_block", clip_pp.p,
-                      (char *) joint_att.p + (size_t) T_ * H_ * 4, mod_ct.p, false, C, false);
-            post_attn(rt, *this, std::string(jb) + ".text_block", text_pp.p,
-                      (char *) joint_att.p + (size_t)(T_ + C) * H_ * 4, mod_ct.p, false, TS, true);
+            post_attn(rt, *this, std::string(jb) + ".clip_block", clip_s.p,
+                      (char *) joint_att.p + (size_t) T_ * H_ * 4, mod_clip.p, false, C, false);
+            post_attn(rt, *this, std::string(jb) + ".text_block", text_s.p,
+                      (char *) joint_att.p + (size_t)(T_ + C) * H_ * 4, mod_text.p, false, TS, true);
         }
         if (i == 0 && getenv("TN_DUMP_EARLY")) {
             const char * dd = getenv("TN_DUMP_EARLY");
@@ -250,8 +253,8 @@ void DitModel::forward(Runtime & rt, gpu::Buf & x, float t,
             };
             wr0("a0_out", joint_att.p, (size_t) S * H_);
             wr0("jb0_lat", lat, (size_t) T_ * H_);
-            wr0("jb0_clip", clip_pp.p, (size_t) C * H_);
-            wr0("jb0_text", text_pp.p, (size_t) TS * H_);
+            wr0("jb0_clip", clip_s.p, (size_t) C * H_);
+            wr0("jb0_text", text_s.p, (size_t) TS * H_);
         }
     }
 

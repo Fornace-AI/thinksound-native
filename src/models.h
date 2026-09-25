@@ -64,8 +64,9 @@ public:
 
     // buffers
     gpu::Buf clip_pp, sync_gather, text_pp_cond, text_pp_unc, gcmlp_cond, gcmlp_unc;
-    gpu::Buf extc, extc_silu, x_in, jointq, sc_qkv, joint_att, mod_lat, mod_ct, mod_fin,
+    gpu::Buf extc, extc_silu, x_in, jointq, sc_qkv, joint_att, mod_lat, mod_clip, mod_text, mod_fin,
              probs, te_out, global_c, gc_pre, pos_lat, pos_clip;
+    gpu::Buf clip_s, text_s;              // per-forward clip/text streams (prep outputs stay intact)
     gpu::Buf sc_l1, sc_r, sc_f1, sc_f3;   // per-block scratch (no aliasing)
     gpu::Buf h1, h3;                      // prep-time scratch (convmlp temporaries)
     std::vector<float> clip_fc_host{std::vector<float>(1024)};

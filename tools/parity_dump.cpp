@@ -137,6 +137,16 @@ int main(int argc, char ** argv) {
         std::vector<float> tmp((size_t) Tt * 64);
         memcpy(tmp.data(), flow.p, tmp.size() * 4);
         dump(pdir, "flow", tmp);
+        // repeat the forward on identical inputs: conditioning must not drift between calls
+        unsetenv("TN_DUMP_EARLY");
+        dit.forward(rt, x, t, text_pp, gcmlp, flow);
+        rt.dev.commit();
+        double dd = 0, bb = 0;
+        for (size_t i = 0; i < tmp.size(); ++i) {
+            double d = (double) ((float *) flow.p)[i] - tmp[i];
+            dd += d * d; bb += (double) tmp[i] * tmp[i];
+        }
+        printf("repeat forward: rel-L2 flow2 vs flow1 = %.3g\n", sqrt(dd / (bb + 1e-30)));
     }
     return 0;
 }

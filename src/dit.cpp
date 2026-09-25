@@ -71,7 +71,10 @@ bool DitModel::prep_conditioning(Runtime & rt, gpu::Buf & clip_f, gpu::Buf & syn
     sc_qkv = rt.dev.alloc(S * 3 * H * 4);   // de-interleaved (block q|k|v) copy
     joint_att = rt.dev.alloc(SM);
     mod_lat = rt.dev.alloc((size_t) T * 6 * H * 4);
-    mod_ct = rt.dev.alloc(6 * H * 4);
+    mod_clip = rt.dev.alloc(6 * H * 4);
+    mod_text = rt.dev.alloc(6 * H * 4);
+    clip_s = rt.dev.alloc((size_t) clip_S * H * 4);
+    text_s = rt.dev.alloc((size_t) text_S * H * 4);
     mod_fin = rt.dev.alloc((size_t) T * 2 * H * 4);
     te_out = rt.dev.alloc(H * 4);
     gc_pre = rt.dev.alloc(H * 4);
