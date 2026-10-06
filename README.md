@@ -44,17 +44,17 @@ Compiles four shaders into `build/thinksound.metallib` and the binaries:
 
 ## Weights
 
-Download the GGUF set (5.5 GB) into a directory, default `/tmp/ts-weights`:
+On a Fornace Mac, install through the private registry, which downloads the GGUF set (5.8 GB)
+at a pinned revision, verifies BLAKE3 and SHA-256, and links `~/Models/thinksound-current`
+(the binary's default `--dir`):
 
 ```bash
-mkdir -p /tmp/ts-weights && cd /tmp/ts-weights
-curl -LO https://huggingface.co/ilintar/thinksound-gguf/resolve/main/dit-bf16.gguf
-curl -LO https://huggingface.co/ilintar/thinksound-gguf/resolve/main/t5-q8.gguf
-curl -LO https://huggingface.co/ilintar/thinksound-gguf/resolve/main/metaclip-text-f32.gguf
-curl -LO https://huggingface.co/ilintar/thinksound-gguf/resolve/main/vae-f32.gguf
-curl -LO https://huggingface.co/ilintar/thinksound-gguf/resolve/main/clip-tokenizer.gguf
-curl -LO https://huggingface.co/ilintar/thinksound-gguf/resolve/main/t5-tokenizer.gguf
+git clone https://github.com/Fornace/mac-models && mac-models/install.sh thinksound
 ```
+
+By hand, put the six files from [ilintar/thinksound-gguf](https://huggingface.co/ilintar/thinksound-gguf)
+(`dit-bf16`, `t5-q8`, `metaclip-text-f32`, `vae-f32`, `clip-tokenizer`, `t5-tokenizer`) and
+`build/thinksound.metallib` in one directory and pass it as `--dir`. Never use `/tmp`: macOS clears it.
 
 ## Usage
 
@@ -68,7 +68,7 @@ build/ts-native --caption "a dog barking" \
 |---|---|---|
 | `--caption <text>` | `a dog barking` | short caption, CLIP conditioning |
 | `--cot <text>` | (dog example) | chain-of-thought sound description, T5 conditioning; one or two sentences naming the source, the space and the texture |
-| `--dir <path>` | `/tmp/ts-weights` | directory holding the GGUF files and `thinksound.metallib` |
+| `--dir <path>` | `~/Models/thinksound-current` | directory holding the GGUF files and `thinksound.metallib` |
 | `--out <path>` | `out.wav` | output WAV path |
 | `--dur <sec>` | `8` | audio duration, 1..30 s |
 | `--steps <int>` | `24` | Euler sampling steps |
