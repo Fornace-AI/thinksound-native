@@ -17,7 +17,7 @@ int main(int argc, char ** argv) {
         printf("usage: %s [options]\n", argv[0]);
         printf("  --caption <text>      caption for CLIP text conditioning (default: 'a dog barking')\n");
         printf("  --cot <text>          Chain-of-thought description for T5 (default: 'A dog barks...')\n");
-        printf("  --dir <path>          GGUF weights and metallib directory (default: /tmp/ts-weights)\n");
+        printf("  --dir <path>          GGUF weights and metallib directory (default: ~/Models/thinksound-current)\n");
         printf("  --out <path>          output WAV path (default: out.wav)\n");
         printf("  --dur <sec>           duration in seconds [1..30] (default: 8)\n");
         printf("  --steps <int>         Euler sampling steps (default: 24)\n");
@@ -29,7 +29,9 @@ int main(int argc, char ** argv) {
     tn::GenOpts opts;
     opts.caption = opt(argc, argv, "--caption", "a dog barking");
     opts.cot     = opt(argc, argv, "--cot", "A dog barks several times, sharp and clear, in a quiet room.");
-    opts.dir     = opt(argc, argv, "--dir", "/tmp/ts-weights");
+    const char * home = std::getenv("HOME");
+    const std::string default_dir = std::string(home ? home : "") + "/Models/thinksound-current";
+    opts.dir     = opt(argc, argv, "--dir", default_dir.c_str());
     opts.dur     = std::atoi(opt(argc, argv, "--dur", "8"));
     opts.steps   = std::atoi(opt(argc, argv, "--steps", "24"));
     opts.cfg     = std::atof(opt(argc, argv, "--cfg", "5.0"));

@@ -13,9 +13,7 @@ xcrun -sdk macosx metal -c -O3 "$DIR/shaders/gemm_mpp.metal" -o "$BUILD_DIR/gemm
 xcrun -sdk macosx metallib "$BUILD_DIR/gemm_attn.air" "$BUILD_DIR/ops_conv.air" \
     "$BUILD_DIR/gemm_tiled.air" "$BUILD_DIR/gemm_mpp.air" -o "$BUILD_DIR/thinksound.metallib"
 
-# Also copy metallib to /tmp/ts-weights for convenient loading
-cp "$BUILD_DIR/thinksound.metallib" /tmp/ts-weights/thinksound.metallib
-echo "Built $BUILD_DIR/thinksound.metallib and copied to /tmp/ts-weights/"
+echo "Built $BUILD_DIR/thinksound.metallib"
 
 echo "=== 2. Compiling C++ and Objective-C++ Sources ==="
 clang++ -std=c++17 -O3 -fobjc-arc -I"$DIR/src" \
