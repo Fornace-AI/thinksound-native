@@ -44,9 +44,9 @@ Compiles four shaders into `build/thinksound.metallib` and the binaries:
 
 ## Weights
 
-On a Fornace Mac, install through the private registry, which downloads the GGUF set (5.8 GB)
-at a pinned revision, verifies BLAKE3 and SHA-256, and links `~/Models/thinksound-current`
-(the binary's default `--dir`):
+On a Fornace Mac, install the release through the private registry: one 5.8 GB download from
+Cloudflare R2 with `ts-native`, `thinksound.metallib` and the six GGUF files in one folder, checked
+against BLAKE3, at `~/Models/thinksound-current` (the binary's default `--dir`):
 
 ```bash
 git clone https://github.com/Fornace/mac-models && mac-models/install.sh thinksound
