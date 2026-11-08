@@ -2,3 +2,5 @@ build/
 _tmp/
 *.wav
 out.wav
+.DS_Store
+node_modules/
