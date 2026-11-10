@@ -49,7 +49,7 @@ Cloudflare R2 with `ts-native`, `thinksound.metallib` and the six GGUF files in 
 against BLAKE3, at `~/Models/thinksound-current` (the binary's default `--dir`):
 
 ```bash
-git clone https://github.com/Fornace/mac-models && mac-models/install.sh thinksound
+git clone https://github.com/Fornace/fornace-models && fornace-models/install.sh thinksound
 ```
 
 By hand, put the six files from [ilintar/thinksound-gguf](https://huggingface.co/ilintar/thinksound-gguf)
